@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fafaf7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Keno">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
+<title>Keno · Analyse</title>
+<style>
+:root{
+  --bg:#fafaf7; --paper:#fff; --paper-2:#f5f5f4;
+  --ink:#0a0a0a; --ink-2:#44403c; --mute:#78716c;
+  --line:#e7e5e4; --line-2:#d6d3d1;
+  --warm-bg:#fffbeb; --warm-border:#b45309; --warm-ink:#92400e;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+.serif{font-family:'Fraunces',Georgia,serif;font-weight:500;letter-spacing:-0.02em}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;-webkit-tap-highlight-color:transparent}
+button:active{transition:none}
+
+header{position:sticky;top:0;z-index:10;background:rgba(250,250,247,0.95);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.head-row{display:flex;justify-content:space-between;align-items:baseline;padding:16px 20px 10px}
+h1{font-family:'Fraunces',Georgia,serif;font-size:24px;font-weight:500;letter-spacing:-0.02em}
+.meta{font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:var(--mute)}
+
+nav{display:flex;gap:4px;padding:0 12px 8px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{padding:6px 14px;font-size:12px;font-weight:500;color:var(--ink-2);border-radius:100px;white-space:nowrap;transition:background 0.15s}
+nav button.active{background:var(--ink);color:#fff}
+
+main{max-width:600px;margin:0 auto;padding:24px 20px 96px}
+.section{margin-bottom:32px}
+.section:last-child{margin-bottom:0}
+.section-title{margin-bottom:14px}
+.section-title h2{font-family:'Fraunces',Georgia,serif;font-weight:500;font-size:22px;letter-spacing:-0.02em}
+.sub{font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:var(--mute);margin-top:3px}
+
+.ball{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;font-weight:500;font-variant-numeric:tabular-nums;flex-shrink:0;background:var(--paper);border:1px solid var(--line-2);color:var(--ink)}
+.ball-sm{width:28px;height:28px;font-size:11px}
+.ball-md{width:36px;height:36px;font-size:14px}
+.ball-lg{width:48px;height:48px;font-size:16px}
+.ball-accent{background:var(--ink);color:#fff;border-color:var(--ink)}
+.ball-warm{background:var(--warm-bg);border-color:var(--warm-border);color:var(--warm-ink)}
+.ball-muted{background:var(--paper-2);border-color:var(--line);color:var(--mute)}
+.flex-balls{display:flex;flex-wrap:wrap;gap:6px}
+
+.card{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px}
+.stat-card .label{font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:var(--mute)}
+.stat-card .value{font-family:'Fraunces',Georgia,serif;font-size:24px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:4px;letter-spacing:-0.02em}
+.stat-card .hint{font-size:12px;color:var(--mute);margin-top:4px}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.grid-7{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+
+.heat-wrap{display:flex;flex-direction:column;align-items:center}
+.heat-cell{width:100%;aspect-ratio:1;border-radius:6px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+.heat-count{font-size:9px;color:var(--mute);margin-top:2px;font-variant-numeric:tabular-nums}
+.legend-note{font-size:10px;color:var(--mute);margin-top:10px;letter-spacing:0.02em}
+
+.list-row{display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin-bottom:6px}
+.list-row .row-mid{flex:1;font-size:12px;color:var(--ink-2)}
+.list-row .row-val{font-family:'Fraunces',Georgia,serif;font-size:18px;font-weight:500;font-variant-numeric:tabular-nums}
+.list-row .row-unit{font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--mute)}
+
+.note{font-size:14px;color:var(--ink-2);line-height:1.6}
+.note strong{color:var(--ink);font-weight:500}
+
+.split-bar{display:flex;height:48px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.split-bar .seg{display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;min-width:48px}
+.split-bar .seg.a{background:var(--ink);color:#fff}
+.split-bar .seg.b{background:var(--paper-2);color:var(--ink-2)}
+.split-meta{display:flex;justify-content:space-between;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:var(--mute);padding:8px 4px 0}
+
+.chart-card{padding:12px}
+.chart-meta{font-size:10px;color:var(--mute);margin-top:8px;letter-spacing:0.02em}
+.legend{display:flex;gap:14px;font-size:10px;color:var(--mute);margin-top:8px;text-transform:uppercase;letter-spacing:0.1em}
+.dot{width:8px;height:8px;display:inline-block;margin-right:4px;vertical-align:middle}
+svg.chart{display:block;width:100%;height:auto}
+
+.choice-btn{aspect-ratio:1;border-radius:6px;background:var(--paper);border:1px solid var(--line-2);font-family:'Fraunces',Georgia,serif;font-size:18px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--ink);transition:background 0.15s}
+.choice-btn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.primary-btn{width:100%;background:var(--ink);color:#fff;padding:16px;border-radius:8px;font-size:12px;letter-spacing:0.15em;text-transform:uppercase;font-weight:500;margin:18px 0;transition:background 0.15s}
+.primary-btn:active{background:var(--ink-2)}
+
+.gen-result{padding:24px;text-align:center}
+.gen-legend{display:flex;gap:16px;justify-content:center;margin-top:16px;font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:0.15em}
+.gen-legend-dot{width:12px;height:12px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle;border:1px solid;box-sizing:border-box}
+.gen-legend-dot.warm{background:var(--warm-bg);border-color:var(--warm-border)}
+.gen-legend-dot.accent{background:var(--ink);border-color:var(--ink)}
+
+.method-box{background:var(--paper-2);border:1px solid var(--line);border-radius:8px;padding:16px;font-size:13px;line-height:1.6;color:var(--ink-2)}
+.method-box p{margin-bottom:10px}
+.method-box p:last-child{margin-bottom:0}
+.method-box .small{font-size:11px;color:var(--mute)}
+.method-box strong{color:var(--ink);font-weight:500}
+
+footer{text-align:center;padding:32px 0;font-size:10px;text-transform:uppercase;letter-spacing:0.2em;color:var(--mute)}
+
+/* Sync UI */
+.meta{cursor:pointer;-webkit-tap-highlight-color:transparent;display:inline-flex;align-items:center;gap:5px}
+.sync-dot{width:6px;height:6px;border-radius:50%;display:inline-block;background:#10b981}
+.sync-dot.error{background:#dc2626}
+.sync-dot.syncing{background:#f59e0b;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+
+.flash{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:100px;font-size:13px;font-weight:500;opacity:0;transition:opacity 0.25s,transform 0.25s;z-index:100;box-shadow:0 4px 16px rgba(0,0,0,0.15);max-width:90%;text-align:center}
+.flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.import-row{display:flex;gap:8px;margin-top:14px}
+.import-btn{flex:1;padding:10px 14px;border:1px solid var(--line-2);border-radius:6px;background:var(--paper);font-size:12px;font-weight:500;color:var(--ink-2);letter-spacing:0.02em;text-align:center}
+.import-btn:active{background:var(--paper-2)}
+
+@media(max-width:380px){
+  .grid-7{gap:4px}
+  .heat-cell{font-size:11px}
+  .heat-count{font-size:8px}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-row">
+    <h1>Keno</h1>
+    <span class="meta" id="header-meta"></span>
+  </div>
+  <nav id="tabs">
+    <button data-tab="dashboard" class="active">Vue</button>
+    <button data-tab="numbers">Numéros</button>
+    <button data-tab="trends">Tendances</button>
+    <button data-tab="dist">Répartition</button>
+    <button data-tab="gen">Générateur</button>
+  </nav>
+</header>
+<main id="content"></main>
+<input type="file" id="csv-input" accept=".csv" style="display:none">
+<footer>Analyse · Pas de garantie de gain</footer>
+
+<script>
+// ============ DONNÉES EMBARQUÉES (fallback hors-ligne) ============
+const EMBEDDED_DRAWS = [
+  {date:'07/06/26',nums:[6, 7, 13, 15, 19, 20, 26, 28, 36, 39, 40, 41, 43, 45, 48, 56]},
+  {date:'06/06/26',nums:[6, 9, 10, 13, 16, 24, 26, 28, 31, 37, 39, 40, 44, 45, 46, 48]},
+  {date:'05/06/26',nums:[1, 2, 21, 24, 25, 27, 30, 35, 42, 45, 46, 48, 49, 52, 53, 54]},
+  {date:'04/06/26',nums:[1, 2, 16, 18, 19, 21, 23, 24, 25, 30, 36, 44, 48, 51, 54, 55]},
+  {date:'03/06/26',nums:[11, 15, 17, 19, 22, 23, 29, 33, 34, 44, 45, 46, 49, 50, 53, 54]},
+  {date:'02/06/26',nums:[1, 8, 14, 17, 19, 21, 22, 23, 30, 32, 34, 41, 48, 49, 50, 55]},
+  {date:'01/06/26',nums:[3, 7, 8, 10, 14, 21, 22, 27, 28, 31, 35, 37, 41, 42, 43, 44]},
+  {date:'31/05/26',nums:[5, 6, 7, 8, 9, 11, 14, 16, 21, 28, 32, 33, 34, 36, 38, 40]},
+  {date:'30/05/26',nums:[7, 10, 12, 19, 20, 22, 31, 33, 34, 37, 38, 39, 41, 42, 46, 47]},
+  {date:'29/05/26',nums:[4, 5, 7, 10, 12, 13, 14, 18, 20, 21, 33, 40, 44, 50, 54, 56]},
+  {date:'28/05/26',nums:[3, 6, 7, 9, 11, 17, 20, 21, 25, 29, 38, 41, 46, 48, 49, 56]},
+  {date:'27/05/26',nums:[5, 7, 13, 18, 20, 22, 23, 26, 27, 34, 39, 41, 43, 47, 52, 54]},
+  {date:'26/05/26',nums:[2, 11, 22, 24, 25, 34, 36, 37, 38, 39, 42, 44, 50, 51, 52, 53]},
+  {date:'25/05/26',nums:[1, 3, 7, 8, 10, 11, 14, 18, 26, 28, 29, 40, 42, 45, 47, 48]},
+  {date:'24/05/26',nums:[2, 4, 19, 20, 21, 25, 27, 30, 32, 40, 41, 49, 50, 53, 54, 55]},
+  {date:'23/05/26',nums:[2, 4, 8, 10, 15, 18, 20, 25, 33, 34, 35, 36, 40, 42, 43, 50]},
+  {date:'22/05/26',nums:[2, 5, 9, 10, 17, 19, 22, 24, 35, 36, 41, 42, 44, 45, 49, 56]},
+  {date:'21/05/26',nums:[3, 7, 9, 20, 26, 29, 32, 33, 35, 39, 42, 46, 48, 50, 51, 53]},
+  {date:'20/05/26',nums:[1, 4, 6, 9, 15, 20, 21, 22, 26, 28, 30, 31, 36, 42, 49, 55]},
+  {date:'19/05/26',nums:[1, 14, 15, 19, 20, 23, 29, 31, 32, 37, 42, 44, 48, 52, 53, 55]},
+  {date:'18/05/26',nums:[1, 5, 7, 9, 15, 21, 24, 28, 29, 30, 35, 38, 45, 47, 49, 55]},
+  {date:'17/05/26',nums:[3, 4, 8, 9, 14, 17, 18, 22, 24, 26, 28, 45, 46, 49, 54, 56]},
+  {date:'16/05/26',nums:[3, 4, 8, 11, 12, 21, 23, 34, 35, 41, 42, 46, 48, 49, 50, 52]},
+  {date:'15/05/26',nums:[1, 5, 6, 22, 23, 28, 31, 36, 38, 39, 43, 45, 46, 48, 53, 55]},
+  {date:'14/05/26',nums:[2, 5, 11, 17, 21, 28, 30, 33, 34, 35, 42, 47, 50, 51, 54, 56]},
+  {date:'13/05/26',nums:[1, 14, 19, 20, 21, 24, 28, 31, 42, 43, 44, 46, 48, 50, 53, 54]},
+  {date:'12/05/26',nums:[2, 7, 8, 9, 10, 13, 17, 23, 25, 30, 31, 32, 33, 48, 49, 54]},
+  {date:'11/05/26',nums:[6, 8, 9, 11, 12, 14, 20, 23, 24, 27, 32, 37, 48, 51, 52, 55]},
+  {date:'10/05/26',nums:[5, 7, 15, 20, 28, 29, 31, 38, 39, 44, 45, 47, 48, 50, 52, 54]},
+  {date:'09/05/26',nums:[2, 5, 6, 14, 17, 18, 19, 24, 28, 32, 33, 43, 44, 46, 47, 51]},
+  {date:'08/05/26',nums:[1, 4, 13, 16, 18, 21, 23, 29, 31, 33, 40, 41, 44, 46, 47, 53]},
+  {date:'07/05/26',nums:[2, 4, 5, 8, 12, 13, 16, 21, 22, 27, 28, 34, 35, 36, 50, 55]},
+  {date:'06/05/26',nums:[12, 16, 17, 21, 26, 29, 30, 31, 34, 41, 43, 49, 51, 52, 54, 55]},
+  {date:'05/05/26',nums:[1, 8, 17, 18, 25, 26, 30, 33, 36, 38, 42, 45, 46, 49, 50, 54]},
+  {date:'04/05/26',nums:[5, 6, 11, 16, 18, 21, 23, 27, 33, 35, 38, 41, 45, 49, 50, 55]},
+  {date:'03/05/26',nums:[3, 8, 10, 12, 15, 18, 20, 24, 28, 31, 33, 36, 39, 42, 47, 51]},
+  {date:'02/05/26',nums:[1, 2, 7, 11, 12, 15, 22, 30, 33, 38, 45, 47, 49, 54, 55, 56]},
+  {date:'01/05/26',nums:[1, 3, 7, 13, 14, 15, 20, 23, 25, 27, 30, 37, 39, 41, 49, 55]},
+  {date:'30/04/26',nums:[4, 8, 11, 14, 17, 22, 27, 29, 33, 34, 36, 40, 43, 48, 55, 56]},
+  {date:'29/04/26',nums:[5, 9, 10, 11, 14, 16, 17, 18, 20, 29, 32, 50, 52, 53, 54, 56]},
+  {date:'28/04/26',nums:[2, 5, 6, 14, 17, 21, 23, 24, 28, 31, 33, 34, 37, 49, 50, 52]},
+  {date:'27/04/26',nums:[3, 7, 9, 16, 17, 24, 27, 29, 31, 32, 36, 39, 44, 47, 51, 56]},
+  {date:'26/04/26',nums:[1, 9, 10, 13, 18, 25, 29, 30, 33, 37, 38, 41, 44, 52, 53, 54]},
+  {date:'25/04/26',nums:[3, 13, 15, 22, 23, 25, 29, 30, 32, 34, 37, 39, 43, 50, 52, 55]},
+  {date:'24/04/26',nums:[5, 12, 18, 23, 25, 26, 29, 39, 42, 43, 44, 46, 49, 50, 53, 54]},
+  {date:'23/04/26',nums:[6, 7, 10, 12, 17, 18, 20, 27, 28, 31, 35, 36, 39, 40, 52, 56]},
+  {date:'22/04/26',nums:[1, 5, 7, 8, 9, 11, 15, 22, 25, 26, 27, 36, 43, 44, 53, 54]},
+  {date:'21/04/26',nums:[4, 7, 9, 10, 13, 14, 16, 28, 29, 36, 38, 43, 47, 50, 51, 56]},
+  {date:'20/04/26',nums:[1, 4, 6, 8, 10, 11, 13, 17, 20, 22, 28, 32, 41, 49, 51, 55]},
+  {date:'19/04/26',nums:[8, 11, 14, 23, 24, 27, 28, 29, 33, 35, 36, 39, 42, 46, 53, 55]},
+  {date:'18/04/26',nums:[6, 8, 10, 12, 16, 17, 19, 22, 26, 29, 31, 35, 40, 48, 50, 51]},
+  {date:'17/04/26',nums:[3, 5, 6, 10, 14, 16, 17, 21, 25, 27, 32, 39, 42, 46, 48, 52]},
+  {date:'16/04/26',nums:[3, 5, 7, 15, 22, 25, 26, 32, 34, 37, 38, 40, 43, 49, 50, 56]},
+  {date:'15/04/26',nums:[5, 10, 12, 16, 23, 25, 26, 29, 30, 33, 35, 37, 38, 41, 44, 46]},
+  {date:'14/04/26',nums:[2, 3, 5, 6, 10, 12, 19, 28, 33, 35, 42, 43, 46, 48, 52, 53]},
+  {date:'13/04/26',nums:[2, 18, 23, 26, 29, 30, 36, 37, 38, 39, 42, 44, 46, 49, 52, 53]},
+  {date:'12/04/26',nums:[1, 14, 16, 18, 22, 23, 25, 31, 32, 39, 42, 45, 48, 50, 51, 53]},
+  {date:'11/04/26',nums:[1, 2, 3, 4, 11, 13, 14, 24, 27, 29, 45, 48, 50, 53, 54, 56]},
+  {date:'10/04/26',nums:[2, 3, 5, 12, 15, 18, 19, 22, 28, 30, 36, 38, 44, 50, 51, 56]},
+  {date:'09/04/26',nums:[3, 4, 7, 9, 12, 14, 17, 26, 30, 32, 33, 44, 45, 46, 49, 56]},
+  {date:'08/04/26',nums:[9, 14, 16, 18, 19, 20, 32, 35, 36, 38, 46, 47, 50, 51, 54, 56]},
+  {date:'07/04/26',nums:[8, 13, 18, 19, 25, 26, 31, 35, 41, 43, 46, 47, 48, 49, 51, 52]},
+  {date:'06/04/26',nums:[12, 16, 20, 25, 26, 32, 33, 35, 40, 42, 44, 47, 48, 50, 51, 53]},
+  {date:'05/04/26',nums:[3, 8, 12, 13, 14, 16, 24, 26, 30, 42, 43, 44, 45, 48, 54, 56]},
+  {date:'04/04/26',nums:[1, 2, 5, 12, 14, 23, 25, 26, 30, 33, 35, 38, 44, 45, 46, 51]},
+  {date:'03/04/26',nums:[1, 4, 5, 6, 11, 12, 15, 17, 26, 27, 40, 41, 44, 45, 47, 52]},
+  {date:'02/04/26',nums:[2, 5, 6, 7, 9, 10, 13, 18, 23, 26, 38, 39, 40, 41, 51, 55]},
+  {date:'01/04/26',nums:[1, 8, 21, 25, 27, 29, 31, 32, 33, 34, 39, 41, 43, 48, 49, 50]},
+  {date:'31/03/26',nums:[6, 9, 12, 23, 26, 32, 35, 40, 41, 42, 43, 44, 45, 47, 49, 53]},
+  {date:'30/03/26',nums:[2, 3, 4, 6, 9, 13, 17, 24, 27, 30, 32, 38, 39, 40, 49, 50]},
+  {date:'29/03/26',nums:[3, 13, 16, 18, 22, 25, 29, 32, 35, 36, 39, 45, 50, 52, 54, 55]},
+  {date:'28/03/26',nums:[2, 4, 17, 22, 26, 27, 30, 40, 41, 43, 44, 45, 47, 49, 51, 56]},
+  {date:'27/03/26',nums:[9, 15, 17, 24, 26, 29, 30, 34, 43, 45, 49, 50, 51, 52, 54, 55]},
+  {date:'26/03/26',nums:[1, 2, 8, 11, 18, 21, 23, 24, 25, 31, 33, 37, 47, 49, 53, 55]},
+  {date:'25/03/26',nums:[2, 3, 4, 12, 17, 23, 25, 30, 32, 34, 35, 36, 38, 40, 48, 52]},
+  {date:'24/03/26',nums:[1, 4, 6, 9, 10, 16, 17, 20, 23, 37, 38, 41, 47, 49, 51, 55]},
+  {date:'23/03/26',nums:[3, 4, 12, 15, 17, 22, 24, 26, 27, 29, 31, 41, 46, 50, 53, 54]},
+  {date:'22/03/26',nums:[4, 6, 10, 11, 22, 25, 31, 35, 37, 39, 41, 43, 44, 45, 46, 52]},
+  {date:'21/03/26',nums:[2, 9, 10, 12, 16, 24, 25, 29, 31, 32, 36, 37, 40, 45, 48, 56]},
+  {date:'20/03/26',nums:[2, 8, 13, 18, 19, 25, 26, 32, 35, 39, 40, 44, 48, 49, 50, 55]},
+  {date:'19/03/26',nums:[2, 4, 8, 9, 12, 15, 29, 34, 36, 38, 41, 44, 48, 49, 51, 52]},
+  {date:'18/03/26',nums:[9, 10, 11, 13, 20, 21, 25, 27, 31, 34, 36, 38, 40, 41, 46, 52]},
+  {date:'17/03/26',nums:[5, 6, 9, 12, 15, 18, 20, 21, 42, 44, 45, 47, 50, 51, 52, 56]},
+  {date:'16/03/26',nums:[1, 10, 12, 17, 19, 21, 27, 28, 34, 36, 38, 40, 42, 46, 52, 53]},
+  {date:'15/03/26',nums:[4, 8, 9, 12, 14, 21, 26, 27, 31, 41, 42, 43, 44, 50, 52, 56]},
+  {date:'14/03/26',nums:[9, 16, 20, 22, 23, 25, 32, 34, 41, 43, 44, 47, 49, 51, 54, 56]},
+  {date:'13/03/26',nums:[5, 10, 17, 18, 19, 21, 22, 24, 34, 35, 37, 38, 46, 48, 52, 56]},
+  {date:'12/03/26',nums:[2, 6, 13, 14, 15, 19, 21, 23, 24, 26, 28, 30, 38, 41, 45, 49]},
+  {date:'11/03/26',nums:[5, 8, 9, 11, 14, 15, 17, 19, 20, 26, 32, 34, 38, 41, 45, 54]},
+  {date:'10/03/26',nums:[7, 15, 21, 26, 29, 30, 32, 33, 36, 38, 41, 44, 45, 50, 53, 55]},
+  {date:'09/03/26',nums:[2, 4, 7, 15, 20, 23, 27, 30, 34, 36, 37, 41, 42, 44, 45, 49]},
+  {date:'08/03/26',nums:[5, 7, 9, 18, 19, 21, 23, 24, 26, 27, 33, 37, 43, 46, 51, 55]},
+  {date:'07/03/26',nums:[1, 8, 10, 15, 17, 20, 22, 23, 24, 28, 29, 45, 47, 48, 54, 55]},
+  {date:'06/03/26',nums:[12, 18, 21, 23, 24, 28, 29, 32, 33, 36, 38, 40, 45, 48, 49, 52]},
+  {date:'05/03/26',nums:[4, 12, 14, 15, 22, 25, 26, 34, 39, 40, 45, 47, 50, 51, 53, 55]},
+  {date:'04/03/26',nums:[6, 10, 11, 12, 13, 14, 15, 19, 20, 22, 23, 24, 35, 48, 49, 56]},
+  {date:'03/03/26',nums:[1, 6, 12, 17, 19, 28, 32, 36, 38, 40, 41, 43, 45, 50, 51, 56]},
+  {date:'02/03/26',nums:[1, 13, 14, 17, 18, 19, 20, 24, 25, 30, 32, 36, 37, 53, 54, 56]},
+  {date:'01/03/26',nums:[2, 4, 6, 7, 8, 10, 13, 16, 19, 22, 40, 42, 46, 49, 50, 51]},
+  {date:'28/02/26',nums:[2, 5, 12, 14, 19, 33, 34, 36, 37, 38, 40, 44, 45, 50, 53, 55]},
+  {date:'27/02/26',nums:[4, 6, 7, 12, 15, 23, 24, 31, 32, 35, 37, 46, 48, 49, 50, 51]},
+  {date:'26/02/26',nums:[7, 10, 18, 19, 23, 26, 27, 31, 34, 36, 37, 39, 48, 51, 52, 53]},
+  {date:'25/02/26',nums:[14, 15, 18, 19, 21, 22, 26, 28, 38, 41, 42, 44, 45, 47, 51, 54]},
+  {date:'24/02/26',nums:[8, 10, 14, 17, 18, 19, 23, 25, 26, 34, 36, 38, 45, 47, 49, 51]},
+  {date:'23/02/26',nums:[1, 3, 8, 17, 21, 22, 23, 24, 32, 35, 36, 45, 46, 47, 48, 53]},
+  {date:'22/02/26',nums:[1, 3, 7, 14, 15, 18, 26, 33, 34, 37, 38, 40, 41, 43, 52, 53]},
+  {date:'21/02/26',nums:[1, 3, 11, 12, 14, 20, 23, 24, 26, 31, 38, 40, 41, 42, 43, 54]},
+  {date:'20/02/26',nums:[1, 2, 3, 4, 7, 9, 15, 23, 26, 30, 33, 35, 38, 46, 47, 55]},
+  {date:'19/02/26',nums:[4, 9, 13, 22, 23, 27, 32, 34, 35, 36, 37, 39, 40, 46, 48, 53]},
+  {date:'18/02/26',nums:[7, 10, 11, 12, 18, 22, 23, 25, 28, 31, 34, 35, 36, 38, 42, 47]},
+  {date:'17/02/26',nums:[9, 13, 14, 15, 16, 17, 19, 23, 24, 30, 31, 36, 40, 41, 47, 51]},
+  {date:'16/02/26',nums:[1, 5, 6, 12, 20, 23, 26, 27, 29, 30, 37, 40, 41, 50, 52, 54]},
+  {date:'15/02/26',nums:[1, 4, 6, 12, 13, 18, 19, 20, 21, 26, 31, 32, 37, 40, 46, 56]},
+  {date:'14/02/26',nums:[4, 6, 7, 9, 13, 15, 17, 22, 23, 25, 27, 29, 30, 32, 45, 49]},
+  {date:'13/02/26',nums:[1, 4, 5, 8, 9, 10, 12, 19, 29, 30, 31, 34, 38, 44, 53, 55]},
+  {date:'12/02/26',nums:[1, 10, 11, 14, 15, 16, 18, 19, 21, 22, 23, 27, 35, 39, 49, 50]},
+  {date:'11/02/26',nums:[2, 4, 6, 7, 8, 17, 18, 24, 31, 32, 41, 43, 52, 53, 54, 56]},
+  {date:'10/02/26',nums:[12, 13, 17, 20, 22, 23, 26, 27, 39, 42, 45, 48, 50, 52, 55, 56]},
+  {date:'09/02/26',nums:[1, 3, 4, 9, 11, 12, 14, 15, 25, 31, 36, 39, 45, 46, 53, 55]},
+  {date:'08/02/26',nums:[2, 7, 13, 19, 21, 23, 26, 29, 35, 40, 43, 44, 51, 52, 53, 56]},
+  {date:'07/02/26',nums:[2, 3, 4, 7, 9, 12, 14, 23, 27, 31, 39, 42, 45, 46, 49, 53]},
+  {date:'06/02/26',nums:[1, 3, 7, 9, 12, 13, 14, 16, 30, 35, 41, 42, 44, 46, 52, 55]},
+  {date:'05/02/26',nums:[4, 6, 7, 12, 14, 19, 25, 28, 36, 38, 44, 46, 48, 50, 52, 55]},
+  {date:'04/02/26',nums:[8, 11, 14, 16, 17, 18, 19, 23, 25, 27, 28, 40, 42, 50, 54, 56]},
+  {date:'03/02/26',nums:[1, 2, 11, 13, 16, 17, 18, 20, 26, 31, 37, 38, 39, 41, 44, 53]},
+  {date:'02/02/26',nums:[5, 8, 10, 13, 16, 24, 26, 34, 41, 44, 47, 48, 49, 51, 54, 55]},
+  {date:'01/02/26',nums:[1, 9, 10, 12, 20, 21, 25, 36, 42, 43, 46, 50, 51, 52, 55, 56]},
+  {date:'31/01/26',nums:[1, 5, 6, 10, 11, 14, 18, 21, 24, 26, 31, 41, 42, 49, 51, 53]},
+  {date:'30/01/26',nums:[1, 2, 9, 14, 16, 19, 23, 24, 30, 32, 36, 37, 41, 42, 48, 56]},
+  {date:'29/01/26',nums:[3, 10, 16, 17, 21, 25, 27, 29, 31, 32, 34, 41, 44, 46, 54, 55]},
+  {date:'28/01/26',nums:[3, 5, 11, 14, 16, 22, 24, 27, 28, 29, 33, 46, 48, 49, 50, 51]},
+  {date:'27/01/26',nums:[1, 8, 9, 10, 11, 17, 21, 24, 27, 29, 40, 41, 45, 48, 53, 55]},
+  {date:'26/01/26',nums:[1, 6, 14, 21, 22, 24, 28, 29, 37, 38, 44, 47, 49, 50, 55, 56]},
+  {date:'25/01/26',nums:[4, 10, 12, 13, 16, 19, 20, 23, 26, 27, 31, 34, 35, 36, 39, 53]},
+  {date:'24/01/26',nums:[2, 4, 7, 14, 17, 18, 19, 25, 26, 28, 29, 37, 41, 45, 48, 49]},
+  {date:'23/01/26',nums:[7, 9, 13, 14, 23, 24, 25, 27, 32, 34, 39, 40, 41, 50, 53, 56]},
+  {date:'22/01/26',nums:[2, 6, 8, 13, 16, 29, 33, 36, 37, 42, 44, 45, 46, 47, 49, 54]},
+  {date:'21/01/26',nums:[4, 6, 10, 11, 16, 27, 28, 29, 30, 40, 41, 42, 46, 47, 51, 52]},
+  {date:'20/01/26',nums:[1, 7, 10, 17, 19, 20, 26, 28, 32, 36, 38, 42, 46, 49, 51, 56]},
+  {date:'19/01/26',nums:[4, 6, 7, 11, 13, 15, 17, 19, 22, 30, 34, 35, 51, 53, 54, 55]},
+  {date:'18/01/26',nums:[4, 7, 8, 13, 16, 17, 19, 20, 21, 24, 27, 28, 31, 33, 50, 54]},
+  {date:'17/01/26',nums:[1, 12, 13, 15, 18, 19, 25, 28, 31, 35, 37, 38, 39, 48, 49, 55]},
+  {date:'16/01/26',nums:[4, 7, 9, 12, 14, 17, 19, 29, 34, 35, 38, 44, 46, 49, 53, 55]},
+  {date:'15/01/26',nums:[2, 7, 8, 10, 12, 14, 20, 21, 26, 27, 33, 38, 40, 42, 44, 45]},
+  {date:'14/01/26',nums:[1, 2, 3, 6, 9, 11, 19, 31, 33, 37, 39, 40, 47, 49, 50, 55]},
+  {date:'13/01/26',nums:[2, 3, 6, 12, 19, 20, 29, 31, 41, 46, 47, 48, 50, 52, 53, 54]},
+  {date:'12/01/26',nums:[2, 4, 14, 15, 16, 18, 20, 21, 23, 26, 27, 30, 34, 35, 45, 54]},
+  {date:'11/01/26',nums:[13, 14, 19, 23, 24, 25, 26, 27, 34, 35, 39, 41, 44, 46, 47, 51]},
+  {date:'10/01/26',nums:[2, 9, 12, 14, 20, 21, 24, 32, 35, 38, 41, 42, 44, 48, 54, 55]},
+  {date:'09/01/26',nums:[7, 10, 13, 15, 19, 23, 26, 30, 32, 34, 37, 40, 41, 45, 50, 51]},
+  {date:'08/01/26',nums:[2, 7, 11, 13, 23, 27, 31, 32, 33, 37, 39, 41, 43, 47, 48, 49]},
+  {date:'07/01/26',nums:[1, 5, 10, 11, 13, 14, 20, 23, 28, 30, 35, 38, 43, 47, 49, 56]},
+  {date:'06/01/26',nums:[7, 12, 17, 19, 22, 23, 24, 26, 34, 37, 38, 42, 44, 45, 48, 55]},
+  {date:'05/01/26',nums:[1, 4, 10, 12, 13, 19, 28, 31, 37, 41, 47, 48, 49, 50, 51, 55]},
+  {date:'04/01/26',nums:[2, 14, 16, 17, 22, 24, 28, 31, 32, 33, 34, 35, 39, 42, 45, 53]},
+  {date:'03/01/26',nums:[3, 8, 12, 13, 15, 18, 20, 23, 24, 29, 34, 35, 38, 50, 52, 55]},
+  {date:'02/01/26',nums:[2, 3, 4, 9, 10, 13, 14, 17, 19, 27, 30, 35, 38, 40, 43, 55]},
+  {date:'01/01/26',nums:[1, 10, 13, 17, 18, 20, 23, 26, 27, 31, 38, 39, 40, 43, 49, 53]},
+  {date:'31/12/25',nums:[3, 8, 9, 12, 15, 17, 21, 24, 29, 30, 31, 32, 41, 44, 50, 54]},
+  {date:'30/12/25',nums:[2, 4, 7, 9, 10, 17, 19, 21, 22, 25, 27, 30, 40, 43, 50, 56]},
+  {date:'29/12/25',nums:[10, 16, 17, 19, 21, 23, 26, 33, 39, 41, 43, 44, 46, 50, 53, 55]},
+  {date:'28/12/25',nums:[4, 8, 9, 13, 16, 19, 23, 28, 33, 35, 36, 46, 48, 50, 52, 53]},
+  {date:'27/12/25',nums:[1, 3, 5, 7, 14, 19, 26, 30, 31, 39, 43, 47, 51, 52, 54, 55]},
+  {date:'26/12/25',nums:[6, 10, 12, 23, 25, 28, 30, 33, 35, 36, 41, 43, 46, 51, 53, 55]},
+  {date:'25/12/25',nums:[2, 3, 4, 9, 13, 15, 18, 23, 24, 27, 28, 34, 41, 47, 49, 56]},
+  {date:'24/12/25',nums:[1, 2, 4, 7, 14, 26, 27, 30, 44, 45, 46, 48, 49, 52, 54, 56]},
+  {date:'23/12/25',nums:[1, 3, 5, 7, 10, 13, 22, 23, 26, 34, 36, 39, 41, 43, 44, 46]},
+  {date:'22/12/25',nums:[6, 8, 11, 20, 28, 32, 34, 35, 37, 43, 44, 45, 47, 48, 50, 52]},
+  {date:'21/12/25',nums:[1, 2, 4, 6, 14, 19, 21, 25, 28, 29, 33, 38, 40, 41, 44, 52]},
+  {date:'20/12/25',nums:[3, 7, 9, 12, 14, 21, 22, 27, 28, 30, 34, 38, 40, 47, 50, 53]},
+  {date:'19/12/25',nums:[3, 5, 6, 12, 14, 15, 16, 24, 27, 30, 43, 48, 49, 50, 51, 56]},
+  {date:'18/12/25',nums:[1, 8, 12, 17, 22, 24, 25, 32, 35, 37, 43, 45, 50, 51, 52, 53]},
+  {date:'17/12/25',nums:[4, 9, 13, 15, 17, 21, 26, 33, 34, 36, 47, 49, 50, 51, 52, 53]},
+  {date:'16/12/25',nums:[1, 5, 6, 8, 9, 11, 13, 16, 25, 28, 32, 37, 46, 47, 55, 56]},
+  {date:'15/12/25',nums:[3, 5, 6, 8, 10, 16, 17, 18, 20, 25, 29, 33, 35, 47, 50, 52]},
+  {date:'14/12/25',nums:[4, 9, 11, 13, 15, 17, 19, 20, 23, 29, 31, 38, 41, 46, 48, 53]},
+  {date:'13/12/25',nums:[3, 9, 11, 12, 13, 19, 22, 24, 25, 30, 31, 39, 43, 45, 46, 55]},
+  {date:'12/12/25',nums:[5, 7, 10, 17, 23, 28, 29, 30, 32, 35, 37, 40, 41, 48, 53, 55]},
+  {date:'11/12/25',nums:[10, 13, 15, 18, 19, 22, 24, 25, 27, 36, 40, 47, 49, 51, 52, 53]},
+  {date:'10/12/25',nums:[2, 4, 7, 8, 12, 17, 20, 21, 27, 33, 34, 35, 36, 44, 48, 56]},
+  {date:'09/12/25',nums:[3, 10, 13, 19, 21, 31, 33, 36, 37, 38, 40, 41, 42, 45, 51, 52]},
+  {date:'08/12/25',nums:[2, 4, 5, 15, 22, 26, 28, 35, 38, 45, 49, 52, 53, 54, 55, 56]},
+  {date:'07/12/25',nums:[2, 3, 10, 11, 18, 21, 26, 28, 30, 32, 33, 40, 46, 47, 53, 55]},
+  {date:'06/12/25',nums:[6, 7, 9, 17, 19, 23, 24, 25, 31, 32, 34, 38, 42, 43, 47, 49]},
+  {date:'05/12/25',nums:[3, 8, 24, 29, 30, 33, 38, 39, 40, 43, 46, 47, 49, 50, 51, 53]},
+  {date:'04/12/25',nums:[3, 13, 14, 22, 25, 28, 31, 32, 34, 36, 39, 42, 47, 51, 53, 55]},
+  {date:'03/12/25',nums:[1, 4, 10, 13, 14, 15, 20, 21, 25, 26, 29, 34, 35, 46, 47, 56]},
+  {date:'02/12/25',nums:[5, 9, 14, 18, 20, 22, 25, 27, 28, 30, 32, 36, 43, 49, 51, 56]},
+  {date:'01/12/25',nums:[2, 9, 11, 22, 24, 30, 32, 37, 38, 40, 41, 43, 46, 50, 53, 55]},
+  {date:'30/11/25',nums:[1, 6, 7, 8, 9, 10, 18, 19, 22, 28, 31, 44, 45, 48, 49, 52]},
+  {date:'29/11/25',nums:[4, 7, 11, 15, 16, 23, 24, 30, 32, 34, 37, 39, 44, 48, 53, 56]},
+  {date:'28/11/25',nums:[12, 19, 20, 21, 22, 26, 27, 31, 33, 36, 41, 42, 44, 45, 50, 54]},
+  {date:'27/11/25',nums:[1, 7, 9, 14, 21, 27, 28, 29, 34, 36, 37, 40, 42, 45, 46, 47]},
+  {date:'26/11/25',nums:[1, 4, 5, 8, 9, 12, 14, 15, 20, 22, 32, 36, 39, 42, 53, 55]},
+  {date:'25/11/25',nums:[2, 4, 7, 8, 17, 18, 19, 20, 28, 30, 31, 37, 42, 47, 48, 51]},
+  {date:'24/11/25',nums:[6, 7, 13, 15, 16, 24, 25, 30, 33, 37, 38, 39, 42, 51, 52, 54]},
+  {date:'23/11/25',nums:[2, 4, 7, 9, 12, 17, 19, 25, 27, 37, 38, 41, 42, 44, 51, 56]},
+  {date:'22/11/25',nums:[1, 4, 5, 10, 15, 18, 21, 24, 31, 34, 35, 38, 41, 47, 49, 54]},
+  {date:'21/11/25',nums:[3, 8, 10, 11, 14, 19, 25, 27, 33, 34, 38, 41, 42, 44, 46, 54]},
+  {date:'20/11/25',nums:[3, 5, 6, 9, 19, 24, 29, 30, 32, 36, 39, 41, 44, 47, 48, 56]},
+  {date:'19/11/25',nums:[1, 3, 7, 8, 9, 13, 25, 27, 28, 33, 35, 37, 41, 44, 46, 56]},
+  {date:'18/11/25',nums:[4, 7, 14, 21, 23, 27, 30, 35, 37, 39, 43, 44, 47, 52, 53, 54]},
+  {date:'17/11/25',nums:[4, 11, 13, 16, 17, 18, 19, 21, 23, 27, 30, 32, 33, 35, 37, 52]},
+  {date:'16/11/25',nums:[1, 2, 6, 7, 13, 14, 23, 31, 38, 41, 43, 45, 47, 50, 52, 53]},
+  {date:'15/11/25',nums:[3, 4, 5, 7, 10, 17, 18, 19, 24, 28, 30, 36, 39, 40, 52, 54]},
+  {date:'14/11/25',nums:[1, 7, 11, 13, 14, 19, 20, 25, 27, 30, 40, 43, 45, 51, 52, 55]},
+  {date:'13/11/25',nums:[4, 11, 13, 16, 26, 35, 36, 37, 38, 42, 44, 49, 50, 52, 54, 55]},
+  {date:'12/11/25',nums:[5, 6, 8, 11, 23, 24, 26, 27, 33, 41, 42, 44, 45, 46, 52, 56]},
+  {date:'11/11/25',nums:[8, 12, 17, 21, 26, 27, 29, 30, 35, 37, 38, 39, 40, 41, 48, 49]},
+  {date:'10/11/25',nums:[4, 8, 9, 11, 13, 28, 30, 39, 40, 46, 48, 50, 51, 54, 55, 56]},
+  {date:'09/11/25',nums:[2, 7, 23, 26, 29, 31, 33, 36, 41, 45, 47, 48, 49, 51, 54, 55]},
+  {date:'08/11/25',nums:[3, 9, 14, 17, 21, 24, 29, 30, 31, 32, 40, 42, 43, 49, 50, 54]},
+  {date:'07/11/25',nums:[7, 11, 12, 14, 17, 21, 27, 30, 37, 38, 40, 42, 46, 47, 48, 54]},
+  {date:'06/11/25',nums:[7, 9, 11, 15, 20, 22, 28, 29, 31, 36, 38, 41, 42, 45, 49, 51]},
+  {date:'05/11/25',nums:[1, 3, 6, 10, 11, 13, 17, 21, 26, 27, 28, 40, 46, 48, 52, 53]},
+  {date:'04/11/25',nums:[1, 7, 9, 10, 12, 15, 25, 28, 29, 30, 32, 37, 38, 41, 43, 51]},
+  {date:'03/11/25',nums:[3, 11, 15, 16, 17, 18, 19, 29, 30, 35, 39, 42, 43, 48, 49, 51]},
+];
+
+const DRAW_SIZE = 16;
+const MAX_NUM = 56;
+
+// ============ STOCKAGE & SYNC ============
+const STORAGE_DRAWS = 'keno_draws_v1';
+const STORAGE_META = 'keno_meta_v1';
+
+function loadDraws(){
+  try {
+    const raw = localStorage.getItem(STORAGE_DRAWS);
+    if(raw){
+      const arr = JSON.parse(raw);
+      if(Array.isArray(arr) && arr.length >= EMBEDDED_DRAWS.length){
+        return arr;
+      }
+    }
+  } catch(e){}
+  return EMBEDDED_DRAWS;
+}
+
+function saveDraws(draws){
+  try {
+    localStorage.setItem(STORAGE_DRAWS, JSON.stringify(draws));
+  } catch(e){}
+}
+
+function loadMeta(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_META)) || {}; } catch(e){ return {}; }
+}
+function saveMeta(meta){
+  try { localStorage.setItem(STORAGE_META, JSON.stringify(meta)); } catch(e){}
+}
+
+// Fusionne fresh dans existing en évitant les doublons par date. Plus récent en tête.
+function mergeDraws(existing, fresh){
+  const byDate = new Map(existing.map(d => [d.date, d]));
+  let added = 0;
+  fresh.forEach(d => {
+    if(!byDate.has(d.date) && Array.isArray(d.nums) && d.nums.length === DRAW_SIZE){
+      byDate.set(d.date, d);
+      added++;
+    }
+  });
+  // Tri par date décroissante (JJ/MM/AA)
+  const sorted = [...byDate.values()].sort((a, b) => {
+    const [da, ma, ya] = a.date.split('/').map(Number);
+    const [db, mb, yb] = b.date.split('/').map(Number);
+    return (yb - ya) || (mb - ma) || (db - da);
+  });
+  return { draws: sorted, added };
+}
+
+function timeAgo(iso){
+  if(!iso) return 'jamais';
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if(min < 1) return "à l'instant";
+  if(min < 60) return `il y a ${min} min`;
+  const h = Math.floor(min / 60);
+  if(h < 24) return `il y a ${h} h`;
+  const j = Math.floor(h / 24);
+  return `il y a ${j} j`;
+}
+
+let DRAWS = loadDraws();
+let SYNC_STATE = 'idle'; // idle | syncing | success | error
+
+// ============ STATS ============
+function computeStats(draws){
+  const freq = Array(MAX_NUM + 1).fill(0);
+  draws.forEach(d => d.nums.forEach(n => { if(n <= MAX_NUM) freq[n]++; }));
+
+  const delay = Array(MAX_NUM + 1).fill(draws.length);
+  for(let i = 0; i < draws.length; i++){
+    draws[i].nums.forEach(n => { if(n <= MAX_NUM && delay[n] === draws.length) delay[n] = i; });
+  }
+
+  const pairCounts = draws.map(d => d.nums.filter(n => n % 2 === 0).length);
+  const impairCounts = draws.map(d => d.nums.filter(n => n % 2 === 1).length);
+  const lowCounts = draws.map(d => d.nums.filter(n => n <= 28).length);
+  const highCounts = draws.map(d => d.nums.filter(n => n > 28).length);
+  const sums = draws.map(d => d.nums.reduce((s, n) => s + n, 0));
+
+  const avg = a => a.reduce((s, b) => s + b, 0) / a.length;
+  const avgPairs = avg(pairCounts);
+  const avgLow = avg(lowCounts);
+  const avgSum = avg(sums);
+
+  const overlaps = [];
+  for(let i = 0; i < draws.length - 1; i++){
+    const set = new Set(draws[i + 1].nums);
+    overlaps.push(draws[i].nums.filter(n => set.has(n)).length);
+  }
+  const avgOverlap = avg(overlaps);
+
+  return {
+    freq, delay, pairCounts, impairCounts, lowCounts, highCounts, sums,
+    avgPairs, avgLow, avgSum, overlaps, avgOverlap,
+    minOverlap: Math.min(...overlaps), maxOverlap: Math.max(...overlaps),
+  };
+}
+
+// ============ GÉNÉRATEUR ============
+function sampleWeighted(pool, count, weights){
+  const items = [...pool];
+  const result = [];
+  for(let i = 0; i < count && items.length > 0; i++){
+    const ws = items.map(n => (weights[n] || 0) + 1);
+    const total = ws.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    let idx = 0;
+    for(let j = 0; j < items.length; j++){
+      r -= ws[j];
+      if(r <= 0){ idx = j; break; }
+    }
+    result.push(items[idx]);
+    items.splice(idx, 1);
+  }
+  return result;
+}
+
+function generateGrid(N, draws, stats){
+  const previous = draws[0].nums;
+  const ratio = stats.avgOverlap / DRAW_SIZE;
+  let seedCount = Math.round(N * ratio);
+  seedCount = Math.max(1, Math.min(N - 1, seedCount));
+  const fromPrev = sampleWeighted(previous, seedCount, stats.freq);
+  const rest = [];
+  for(let i = 1; i <= MAX_NUM; i++) if(!previous.includes(i)) rest.push(i);
+  const fromRest = sampleWeighted(rest, N - seedCount, stats.freq);
+  return { grid: [...fromPrev, ...fromRest].sort((a, b) => a - b), fromPrev, seedCount, ratio };
+}
+
+// ============ HELPERS UI ============
+const $ = sel => document.querySelector(sel);
+const escape = s => String(s);
+
+function ball(n, variant = '', size = 'md'){
+  const v = variant ? `ball-${variant}` : '';
+  return `<div class="ball ball-${size} ${v}">${n}</div>`;
+}
+function title(t, sub){ return `<div class="section-title"><h2>${t}</h2>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`; }
+function stat(label, value, hint){ return `<div class="card stat-card"><div class="label">${label}</div><div class="value">${value}</div>${hint ? `<div class="hint">${hint}</div>` : ''}</div>`; }
+
+// ============ CHARTS SVG ============
+function lineChart(data, opts = {}){
+  const w = 320, h = 160, padL = 26, padR = 8, padT = 8, padB = 18;
+  const iw = w - padL - padR, ih = h - padT - padB;
+  const ys = data.map(d => d.y);
+  const yMin = 0, yMax = Math.max(...ys) + 1;
+  const x = i => padL + (i / (data.length - 1)) * iw;
+  const y = v => padT + (1 - (v - yMin) / (yMax - yMin)) * ih;
+  const path = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(d.y).toFixed(1)}`).join('');
+  const dots = data.map((d, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(d.y).toFixed(1)}" r="1.2" fill="#0a0a0a"/>`).join('');
+  const ticks = [];
+  for(let v = 0; v <= yMax; v += Math.max(1, Math.ceil(yMax / 4))){
+    ticks.push(`<line x1="${padL}" y1="${y(v)}" x2="${w - padR}" y2="${y(v)}" stroke="#e7e5e4" stroke-dasharray="2 2"/><text x="${padL - 6}" y="${y(v) + 3}" font-size="9" fill="#78716c" text-anchor="end">${v}</text>`);
+  }
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${ticks.join('')}<path d="${path}" stroke="#0a0a0a" stroke-width="1.3" fill="none"/>${dots}</svg>`;
+}
+
+function stackedBars(data, keyA, keyB, opts = {}){
+  const w = 320, h = 160, padL = 26, padR = 8, padT = 8, padB = 18;
+  const iw = w - padL - padR, ih = h - padT - padB;
+  const max = Math.max(...data.map(d => d[keyA] + d[keyB]));
+  const bw = iw / data.length * 0.7;
+  const gap = iw / data.length * 0.3;
+  const bars = data.map((d, i) => {
+    const bx = padL + i * (bw + gap) + gap / 2;
+    const ha = (d[keyA] / max) * ih;
+    const hb = (d[keyB] / max) * ih;
+    return `<rect x="${bx.toFixed(1)}" y="${(padT + ih - ha).toFixed(1)}" width="${bw.toFixed(1)}" height="${ha.toFixed(1)}" fill="#0a0a0a"/><rect x="${bx.toFixed(1)}" y="${(padT + ih - ha - hb).toFixed(1)}" width="${bw.toFixed(1)}" height="${hb.toFixed(1)}" fill="#a8a29e"/>`;
+  }).join('');
+  const ticks = [0, Math.ceil(max / 2), max].map(v => `<line x1="${padL}" y1="${padT + ih - (v / max) * ih}" x2="${w - padR}" y2="${padT + ih - (v / max) * ih}" stroke="#e7e5e4" stroke-dasharray="2 2"/><text x="${padL - 6}" y="${padT + ih - (v / max) * ih + 3}" font-size="9" fill="#78716c" text-anchor="end">${v}</text>`).join('');
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${ticks}${bars}</svg>`;
+}
+
+function barChart(data, opts = {}){
+  const w = 320, h = 160, padL = 26, padR = 8, padT = 8, padB = 22;
+  const iw = w - padL - padR, ih = h - padT - padB;
+  const max = Math.max(...data.map(d => d.v));
+  const bw = iw / data.length * 0.8;
+  const gap = iw / data.length * 0.2;
+  const showLabel = opts.labelEvery || 1;
+  const bars = data.map((d, i) => {
+    const bx = padL + i * (bw + gap) + gap / 2;
+    const bh = (d.v / max) * ih;
+    const lbl = (i % showLabel === 0) ? `<text x="${(bx + bw / 2).toFixed(1)}" y="${h - 6}" font-size="9" fill="#78716c" text-anchor="middle">${d.l}</text>` : '';
+    return `<rect x="${bx.toFixed(1)}" y="${(padT + ih - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="#0a0a0a"/>${lbl}`;
+  }).join('');
+  const ticks = [0, Math.ceil(max / 2), max].map(v => `<line x1="${padL}" y1="${padT + ih - (v / max) * ih}" x2="${w - padR}" y2="${padT + ih - (v / max) * ih}" stroke="#e7e5e4" stroke-dasharray="2 2"/><text x="${padL - 6}" y="${padT + ih - (v / max) * ih + 3}" font-size="9" fill="#78716c" text-anchor="end">${v}</text>`).join('');
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${ticks}${bars}</svg>`;
+}
+
+// ============ ÉTAT GLOBAL ============
+const state = { tab: 'dashboard', genN: 6, genResult: null };
+let stats = computeStats(DRAWS);
+
+function updateHeader(){
+  const meta = loadMeta();
+  const el = $('#header-meta');
+  if(SYNC_STATE === 'syncing'){
+    el.innerHTML = `<span class="sync-dot syncing"></span>Sync…`;
+  } else if(SYNC_STATE === 'error'){
+    el.innerHTML = `<span class="sync-dot error"></span>${DRAWS.length} · hors-ligne`;
+  } else {
+    el.innerHTML = `<span class="sync-dot ok"></span>${DRAWS.length} tirages · ${timeAgo(meta.updated)}`;
+  }
+}
+updateHeader();
+$('#header-meta').addEventListener('click', () => syncNow());
+
+async function syncNow(){
+  if(SYNC_STATE === 'syncing') return;
+  SYNC_STATE = 'syncing';
+  updateHeader();
+  try {
+    const res = await fetch('/.netlify/functions/keno-latest', { cache: 'no-cache' });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if(!data.draws || !data.draws.length) throw new Error('Réponse vide');
+    const { draws: merged, added } = mergeDraws(DRAWS, data.draws);
+    DRAWS = merged;
+    saveDraws(DRAWS);
+    saveMeta({ updated: data.updated || new Date().toISOString(), source: data.source, added });
+    stats = computeStats(DRAWS);
+    SYNC_STATE = 'success';
+    updateHeader();
+    if(added > 0) flash(`${added} nouveau${added > 1 ? 'x' : ''} tirage${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''}`);
+    render();
+  } catch(e){
+    SYNC_STATE = 'error';
+    updateHeader();
+    console.warn('Sync échec:', e.message);
+  }
+}
+
+function flash(msg){
+  const el = document.createElement('div');
+  el.className = 'flash';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, 2400);
+}
+
+// Import manuel CSV (fallback si sync auto échoue)
+function importCsv(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if(lines.length < 2) throw new Error('CSV vide');
+      const header = lines[0].toLowerCase();
+      const sep = header.includes(';') ? ';' : ',';
+      const cols = header.split(sep);
+      const dateIdx = cols.findIndex(c => c.includes('date_de_tirage') || c.includes('date'));
+      const bouleIdxs = [];
+      for(let i = 1; i <= 16; i++){
+        const idx = cols.findIndex(c => c.trim() === `boule${i}`);
+        if(idx >= 0) bouleIdxs.push(idx);
+      }
+      if(dateIdx < 0 || bouleIdxs.length !== 16) throw new Error('Format CSV non reconnu (attendu : date_de_tirage + boule1..16)');
+      const fresh = [];
+      for(let i = 1; i < lines.length; i++){
+        const parts = lines[i].split(sep);
+        const d = parts[dateIdx];
+        if(!d) continue;
+        const [dd, mm, yyyy] = d.split('/');
+        if(!dd || !mm || !yyyy) continue;
+        const nums = bouleIdxs.map(idx => parseInt(parts[idx], 10)).filter(n => !isNaN(n));
+        if(nums.length !== 16) continue;
+        fresh.push({ date: `${dd}/${mm}/${yyyy.slice(-2)}`, nums: nums.sort((a, b) => a - b) });
+      }
+      const { draws: merged, added } = mergeDraws(DRAWS, fresh);
+      DRAWS = merged;
+      saveDraws(DRAWS);
+      saveMeta({ updated: new Date().toISOString(), source: 'import-csv', added });
+      stats = computeStats(DRAWS);
+      updateHeader();
+      flash(`Import : ${added} nouveau${added > 1 ? 'x' : ''} tirage${added > 1 ? 's' : ''}`);
+      render();
+    } catch(err){
+      flash('Erreur : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+$('#csv-input').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if(f) importCsv(f);
+  e.target.value = '';
+});
+
+// ============ ONGLETS ============
+function renderDashboard(){
+  const last = DRAWS[0], prev = DRAWS[1];
+  const overlap = last.nums.filter(n => prev.nums.includes(n));
+  return `
+    <div class="section">
+      ${title('Dernier tirage', `Tirage du ${last.date}`)}
+      <div class="flex-balls">${last.nums.map(n => ball(n, overlap.includes(n) ? 'warm' : '')).join('')}</div>
+      <p style="font-size:12px;color:var(--mute);margin-top:14px">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warm-border);vertical-align:middle;margin-right:6px"></span>
+        ${overlap.length} numéros déjà présents au tirage précédent (${prev.date})
+      </p>
+    </div>
+    <div class="section">
+      ${title('Indicateurs clés', `${DRAWS.length} tirages analysés`)}
+      <div class="grid-2">
+        ${stat('Chevauch. moyen', stats.avgOverlap.toFixed(2), `entre ${stats.minOverlap} et ${stats.maxOverlap}`)}
+        ${stat('Pairs / tirage', stats.avgPairs.toFixed(1), `sur ${DRAW_SIZE}`)}
+        ${stat('Bas (1-28)', stats.avgLow.toFixed(1), `sur ${DRAW_SIZE}`)}
+        ${stat('Somme moy.', Math.round(stats.avgSum), 'par tirage')}
+      </div>
+    </div>
+    <div class="section">
+      ${title('Note statistique', 'Loi des grands nombres')}
+      <p class="note">En moyenne, <strong>${stats.avgOverlap.toFixed(1)} numéros</strong> du tirage précédent reviennent au tirage suivant. C'est mathématiquement attendu — chaque tirage reste indépendant — mais cette régularité est utilisée par le générateur pour calibrer combien de numéros conserver.</p>
+      <div class="import-row">
+        <button class="import-btn" id="db-sync">Synchroniser</button>
+        <button class="import-btn" id="db-import">Importer un CSV FDJ</button>
+      </div>
+    </div>`;
+}
+
+function renderNumbers(){
+  const max = Math.max(...stats.freq.slice(1));
+  const cells = [];
+  for(let n = 1; n <= MAX_NUM; n++){
+    const f = stats.freq[n];
+    const intensity = max > 0 ? f / max : 0;
+    const bg = `rgba(28,25,23,${(intensity * 0.9).toFixed(2)})`;
+    const col = intensity > 0.45 ? '#fff' : '#1c1917';
+    cells.push(`<div class="heat-wrap"><div class="heat-cell" style="background:${bg};color:${col}">${n}</div><div class="heat-count">${f}</div></div>`);
+  }
+  const cold = Array.from({length: MAX_NUM}, (_, i) => ({n: i + 1, d: stats.delay[i + 1]})).sort((a, b) => b.d - a.d).slice(0, 8);
+  const hot = Array.from({length: MAX_NUM}, (_, i) => ({n: i + 1, f: stats.freq[i + 1]})).sort((a, b) => b.f - a.f).slice(0, 8);
+  return `
+    <div class="section">
+      ${title('Numéros 1 à 56', `Fréquence d'apparition · ${DRAWS.length} tirages`)}
+      <div class="grid-7">${cells.join('')}</div>
+      <div class="legend-note">Intensité = fréquence relative. Nombre en bas = apparitions.</div>
+    </div>
+    <div class="section">
+      ${title('Numéros froids', 'Les plus retardés')}
+      ${cold.map(({n, d}) => `<div class="list-row">${ball(n, '', 'sm')}<div class="row-mid">absent depuis</div><div class="row-val">${d}</div><div class="row-unit">tirages</div></div>`).join('')}
+    </div>
+    <div class="section">
+      ${title('Numéros chauds', 'Top 8 fréquences')}
+      ${hot.map(({n, f}) => `<div class="list-row">${ball(n, 'accent', 'sm')}<div class="row-mid">apparitions</div><div class="row-val">${f}</div><div class="row-unit">fois</div></div>`).join('')}
+    </div>`;
+}
+
+function renderTrends(){
+  const recent = stats.overlaps.slice(0, 50).reverse().map((v, i) => ({y: v}));
+  const dist = DRAWS.slice(0, 20).slice().reverse().map(d => ({
+    pairs: d.nums.filter(n => n % 2 === 0).length,
+    impairs: d.nums.filter(n => n % 2 === 1).length,
+  }));
+  const freqHist = Array.from({length: MAX_NUM}, (_, i) => ({l: String(i + 1), v: stats.freq[i + 1]}));
+  return `
+    <div class="section">
+      ${title('Chevauchements', '50 derniers tirages · numéros repris du précédent')}
+      <div class="card chart-card">${lineChart(recent)}
+        <div class="chart-meta">Moy ${stats.avgOverlap.toFixed(2)} · Min ${stats.minOverlap} · Max ${stats.maxOverlap}</div>
+      </div>
+    </div>
+    <div class="section">
+      ${title('Pairs vs impairs', '20 derniers tirages')}
+      <div class="card chart-card">${stackedBars(dist, 'pairs', 'impairs')}
+        <div class="legend"><span><span class="dot" style="background:#0a0a0a"></span>Pairs</span><span><span class="dot" style="background:#a8a29e"></span>Impairs</span></div>
+      </div>
+    </div>
+    <div class="section">
+      ${title('Distribution des fréquences', 'Tous les numéros 1-56')}
+      <div class="card chart-card">${barChart(freqHist, {labelEvery: 7})}</div>
+    </div>`;
+}
+
+function renderDist(){
+  const totalPairs = stats.pairCounts.reduce((a, b) => a + b, 0);
+  const totalImpairs = stats.impairCounts.reduce((a, b) => a + b, 0);
+  const totalLow = stats.lowCounts.reduce((a, b) => a + b, 0);
+  const totalHigh = stats.highCounts.reduce((a, b) => a + b, 0);
+  const pctPairs = totalPairs / (totalPairs + totalImpairs) * 100;
+  const pctLow = totalLow / (totalLow + totalHigh) * 100;
+
+  const pairFreq = {};
+  DRAWS.forEach(d => {
+    for(let i = 0; i < d.nums.length; i++){
+      for(let j = i + 1; j < d.nums.length; j++){
+        const k = `${d.nums[i]}-${d.nums[j]}`;
+        pairFreq[k] = (pairFreq[k] || 0) + 1;
+      }
+    }
+  });
+  const topPairs = Object.entries(pairFreq).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  const decades = [0, 0, 0, 0, 0, 0];
+  DRAWS.forEach(d => d.nums.forEach(n => decades[Math.min(5, Math.floor((n - 1) / 10))]++));
+  const decLabels = ['1-10', '11-20', '21-30', '31-40', '41-50', '51-56'];
+  const decData = decLabels.map((l, i) => ({l, v: decades[i]}));
+
+  return `
+    <div class="section">
+      ${title('Pairs / Impairs', `Sur ${totalPairs + totalImpairs} numéros tirés`)}
+      <div class="split-bar">
+        <div class="seg a" style="width:${pctPairs}%">${pctPairs.toFixed(1)}%</div>
+        <div class="seg b" style="width:${100 - pctPairs}%">${(100 - pctPairs).toFixed(1)}%</div>
+      </div>
+      <div class="split-meta"><span>Pairs · ${totalPairs}</span><span>Impairs · ${totalImpairs}</span></div>
+    </div>
+    <div class="section">
+      ${title('Bas / Hauts', 'Bas (1-28) vs Hauts (29-56)')}
+      <div class="split-bar">
+        <div class="seg a" style="width:${pctLow}%">${pctLow.toFixed(1)}%</div>
+        <div class="seg b" style="width:${100 - pctLow}%">${(100 - pctLow).toFixed(1)}%</div>
+      </div>
+      <div class="split-meta"><span>Bas · ${totalLow}</span><span>Hauts · ${totalHigh}</span></div>
+    </div>
+    <div class="section">
+      ${title('Décennies', 'Apparitions par dizaine')}
+      <div class="card chart-card">${barChart(decData)}</div>
+    </div>
+    <div class="section">
+      ${title('Top paires', 'Couples les plus fréquents')}
+      ${topPairs.map(([k, v]) => {
+        const [a, b] = k.split('-').map(Number);
+        return `<div class="list-row">${ball(a, '', 'sm')}${ball(b, '', 'sm')}<div class="row-mid"></div><div class="row-val">${v}</div><div class="row-unit">fois</div></div>`;
+      }).join('')}
+    </div>
+    <div class="section">
+      ${title('Plage des sommes', 'Somme des numéros par tirage')}
+      <div class="grid-3">
+        ${stat('Min', Math.min(...stats.sums))}
+        ${stat('Moyenne', Math.round(stats.avgSum))}
+        ${stat('Max', Math.max(...stats.sums))}
+      </div>
+    </div>`;
+}
+
+function renderGen(){
+  if(!state.genResult) state.genResult = generateGrid(state.genN, DRAWS, stats);
+  const r = state.genResult;
+  const prev = DRAWS[0];
+  const ns = [4, 5, 6, 7, 8, 9, 10];
+  return `
+    <div class="section">
+      ${title('Choisir N', 'Nombre de numéros à jouer')}
+      <div class="grid-7">${ns.map(n => `<button class="choice-btn ${state.genN === n ? 'active' : ''}" data-n="${n}">${n}</button>`).join('')}</div>
+    </div>
+    <button class="primary-btn" id="gen-btn">Générer une grille</button>
+    <div class="section">
+      ${title('Grille suggérée', `${r.seedCount} numéro${r.seedCount > 1 ? 's' : ''} repris du tirage précédent`)}
+      <div class="card gen-result">
+        <div class="flex-balls" style="justify-content:center">
+          ${r.grid.map(n => ball(n, r.fromPrev.includes(n) ? 'warm' : 'accent', 'lg')).join('')}
+        </div>
+        <div class="gen-legend">
+          <span><span class="gen-legend-dot warm"></span>Repris</span>
+          <span><span class="gen-legend-dot accent"></span>Nouveau</span>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      ${title('Méthode', 'Comment ces numéros ont été choisis')}
+      <div class="method-box">
+        <p>Sur les ${DRAWS.length} derniers tirages, en moyenne <strong>${stats.avgOverlap.toFixed(2)}</strong> numéros sur ${DRAW_SIZE} du tirage précédent reviennent au tirage suivant (ratio ${(r.ratio * 100).toFixed(1)}%).</p>
+        <p>Pour une grille de ${state.genN} numéros, l'app conserve donc <strong>${r.seedCount}</strong> numéro${r.seedCount > 1 ? 's' : ''} du tirage du ${prev.date}, choisi${r.seedCount > 1 ? 's' : ''} via une pondération par fréquence historique. Les <strong>${state.genN - r.seedCount}</strong> autre${state.genN - r.seedCount > 1 ? 's' : ''} sont tirés parmi le reste, également pondérés par leur fréquence.</p>
+        <p class="small">Rappel : chaque tirage Keno est indépendant. Cette méthode reproduit les tendances observées mais ne donne pas d'avantage prédictif réel.</p>
+      </div>
+    </div>
+    <div class="section">
+      ${title('Tirage précédent', 'Tirage de référence')}
+      <div class="card">
+        <div class="sub" style="margin-bottom:10px">${prev.date}</div>
+        <div class="flex-balls">${prev.nums.map(n => ball(n, r.fromPrev.includes(n) ? 'warm' : 'muted', 'sm')).join('')}</div>
+      </div>
+    </div>`;
+}
+
+// ============ RENDU ============
+function render(){
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
+  const c = $('#content');
+  switch(state.tab){
+    case 'dashboard':
+      c.innerHTML = renderDashboard();
+      $('#db-sync').onclick = () => syncNow();
+      $('#db-import').onclick = () => $('#csv-input').click();
+      break;
+    case 'numbers': c.innerHTML = renderNumbers(); break;
+    case 'trends': c.innerHTML = renderTrends(); break;
+    case 'dist': c.innerHTML = renderDist(); break;
+    case 'gen':
+      c.innerHTML = renderGen();
+      $('#gen-btn').onclick = () => { state.genResult = generateGrid(state.genN, DRAWS, stats); render(); };
+      document.querySelectorAll('.choice-btn').forEach(b => {
+        b.onclick = () => { state.genN = +b.dataset.n; state.genResult = generateGrid(state.genN, DRAWS, stats); render(); };
+      });
+      break;
+  }
+  window.scrollTo(0, 0);
+}
+
+document.querySelectorAll('#tabs button').forEach(b => {
+  b.addEventListener('click', () => { state.tab = b.dataset.tab; render(); });
+});
+
+render();
+
+// Sync auto au démarrage (non-bloquant, avec petit délai pour ne pas concurrencer le rendu initial)
+setTimeout(() => syncNow(), 800);
+
+// ============ SERVICE WORKER ============
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
