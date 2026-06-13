@@ -424,9 +424,13 @@ function mergeDraws(existing, fresh){
   const byDate = new Map(existing.map(d => [d.date, d]));
   let added = 0;
   fresh.forEach(d => {
-    if(!byDate.has(d.date) && Array.isArray(d.nums) && d.nums.length === DRAW_SIZE){
+    if(!Array.isArray(d.nums) || d.nums.length !== DRAW_SIZE) return;
+    if(!byDate.has(d.date)){
       byDate.set(d.date, d);
       added++;
+    } else if(d.mult && !byDate.get(d.date).mult){
+      // Complète le multiplicateur d'un tirage déjà connu (ex. import CSV postérieur).
+      byDate.get(d.date).mult = d.mult;
     }
   });
   // Tri par date décroissante (JJ/MM/AA)
@@ -557,17 +561,19 @@ function dateKey(s){
 }
 
 // Rejoue une grille sur une liste de tirages et calcule le bilan complet.
-function backtest(grid, draws, stake){
+function backtest(grid, draws, stake, useMult){
   const N = grid.length;
   const hitDist = Array(Math.min(N, DRAW_SIZE) + 1).fill(0);
-  let totalGain = 0, wins = 0, best = 0, bestDraw = null, bestHits = 0;
+  let totalGain = 0, wins = 0, best = 0, bestDraw = null, bestHits = 0, multKnown = 0;
   draws.forEach(dr => {
+    if(dr.mult) multKnown++;
     const set = new Set(dr.nums);
     let hits = 0;
     for(const n of grid) if(set.has(n)) hits++;
     hitDist[hits]++;
-    const g = gainFor(N, hits, stake);
+    let g = gainFor(N, hits, stake);
     if(g > 0){
+      if(useMult && dr.mult) g *= dr.mult;
       totalGain += g;
       wins++;
       if(g > best){ best = g; bestDraw = dr.date; bestHits = hits; }
@@ -580,7 +586,7 @@ function backtest(grid, draws, stake){
     N, n, stake, totalStake, totalGain, net,
     roi: totalStake > 0 ? (net / totalStake) * 100 : 0,
     trj: totalStake > 0 ? (totalGain / totalStake) * 100 : 0,
-    hitDist, wins, best, bestDraw, bestHits,
+    hitDist, wins, best, bestDraw, bestHits, useMult, multKnown,
   };
 }
 
@@ -677,7 +683,7 @@ function barChart(data, opts = {}){
 }
 
 // ============ ÉTAT GLOBAL ============
-const state = { tab: 'dashboard', genN: 6, genResult: null, btSel: [], btStake: 1, btResult: null };
+const state = { tab: 'dashboard', genN: 6, genResult: null, btSel: [], btStake: 1, btScope: 'all', btUseMult: false, btResult: null };
 let stats = computeStats(DRAWS);
 
 function updateHeader(){
@@ -743,6 +749,7 @@ function importCsv(file){
       const sep = header.includes(';') ? ';' : ',';
       const cols = header.split(sep);
       const dateIdx = cols.findIndex(c => c.includes('date_de_tirage') || c.includes('date'));
+      const multIdx = cols.findIndex(c => c.replace(/\s/g, '').includes('multiplicateur'));
       const bouleIdxs = [];
       for(let i = 1; i <= 16; i++){
         const idx = cols.findIndex(c => c.trim() === `boule${i}`);
@@ -758,7 +765,12 @@ function importCsv(file){
         if(!dd || !mm || !yyyy) continue;
         const nums = bouleIdxs.map(idx => parseInt(parts[idx], 10)).filter(n => !isNaN(n));
         if(nums.length !== 16) continue;
-        fresh.push({ date: `${dd}/${mm}/${yyyy.slice(-2)}`, nums: nums.sort((a, b) => a - b) });
+        const draw = { date: `${dd}/${mm}/${yyyy.slice(-2)}`, nums: nums.sort((a, b) => a - b) };
+        if(multIdx >= 0){
+          const m = parseInt(String(parts[multIdx]).replace(/\D/g, ''), 10);
+          if([2, 3, 5].includes(m)) draw.mult = m;
+        }
+        fresh.push(draw);
       }
       const { draws: merged, added } = mergeDraws(DRAWS, fresh);
       DRAWS = merged;
@@ -793,6 +805,8 @@ function renderDashboard(){
         <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warm-border);vertical-align:middle;margin-right:6px"></span>
         ${overlap.length} numéros déjà présents au tirage précédent (${prev.date})
       </p>
+      <div class="stake-row" style="margin-top:16px">${[2, 3, 5].map(m => `<button class="stake-btn ${last.mult === m ? 'on' : ''}" data-m="${m}">×${m}</button>`).join('')}</div>
+      <div class="sub" style="margin-top:8px;text-transform:none;letter-spacing:0">${last.mult ? `Multiplicateur ×${last.mult} enregistré pour le tirage du ${last.date}.` : 'Touchez pour enregistrer le multiplicateur tiré ce soir.'}</div>
     </div>
     <div class="section">
       ${title('Indicateurs clés', `${DRAWS.length} tirages analysés`)}
@@ -1016,7 +1030,7 @@ function renderBacktest(){
     const netCls = r.net >= 0 ? 'net-pos' : 'net-neg';
     resultHtml = `
     <div class="section">
-      ${title('Bilan', `Grille de ${r.N} numéros · mise ${r.stake} € · ${r.n} tirages`)}
+      ${title('Bilan', `${r.N} num · mise ${r.stake} € · ${r.n} tirage${r.n > 1 ? 's' : ''}${r.useMult ? ' · ×mult' : ''}`)}
       <div class="grid-2">
         ${stat('Mise totale', r.totalStake.toLocaleString('fr-FR') + ' €', `${r.n} × ${r.stake} €`)}
         ${stat('Gains', r.totalGain.toLocaleString('fr-FR') + ' €', `${r.wins} tirage${r.wins > 1 ? 's' : ''} gagnant${r.wins > 1 ? 's' : ''}`)}
@@ -1034,8 +1048,11 @@ function renderBacktest(){
     </div>
     <div class="section">
       <div class="method-box">
-        <p>Ce bilan rejoue la même grille sur les ${r.n} tirages de l'historique, avec la table de gains officielle FDJ. Le solde net est presque toujours négatif : c'est le TRJ de 59,5 % à l'œuvre.</p>
-        <p class="small">Hors option Multiplicateur (tirée au hasard à chaque tirage, espérance ×2,45). Le passé ne prédit pas les tirages futurs.</p>
+        <p>Ce bilan rejoue la même grille sur ${r.n} tirage${r.n > 1 ? 's' : ''}, avec la table de gains officielle FDJ. Le solde net est presque toujours négatif : c'est le TRJ de 59,5 % à l'œuvre.</p>
+        ${r.useMult
+          ? `<p class="small">Multiplicateur réel appliqué${r.multKnown < r.n ? ` — connu sur ${r.multKnown}/${r.n} tirage${r.n > 1 ? 's' : ''}, les autres comptés ×1. Importez le CSV FDJ (onglet Vue) pour compléter.` : ` sur l'ensemble des tirages.`}</p>`
+          : `<p class="small">Hors multiplicateur. Choisissez « Avec » pour l'intégrer.</p>`}
+        <p class="small">Le passé ne prédit pas les tirages futurs.</p>
       </div>
     </div>`;
   }
@@ -1049,6 +1066,21 @@ function renderBacktest(){
       <div class="pad">${cells.join('')}</div>
       <div class="pad-count">${sel.length} / 10 sélectionné${sel.length > 1 ? 's' : ''}${sel.length < 4 ? ' · minimum 4' : ''}</div>
       ${state.genResult ? `<div class="import-row"><button class="import-btn" id="bt-load">Charger la dernière grille générée</button></div>` : ''}
+    </div>
+    <div class="section">
+      ${title('Périmètre', 'Sur quels tirages tester')}
+      <div class="stake-row">
+        <button class="stake-btn ${state.btScope === 'all' ? 'on' : ''}" data-scope="all">Tous (${DRAWS.length})</button>
+        <button class="stake-btn ${state.btScope === '50' ? 'on' : ''}" data-scope="50">50 derniers</button>
+        <button class="stake-btn ${state.btScope === 'last' ? 'on' : ''}" data-scope="last">Dernier</button>
+      </div>
+    </div>
+    <div class="section">
+      ${title('Multiplicateur', 'Appliquer le multiplicateur réel de chaque tirage')}
+      <div class="stake-row">
+        <button class="stake-btn ${!state.btUseMult ? 'on' : ''}" data-mult="0">Sans</button>
+        <button class="stake-btn ${state.btUseMult ? 'on' : ''}" data-mult="1">Avec</button>
+      </div>
     </div>
     <button class="primary-btn" id="bt-run" ${ready ? '' : 'style="opacity:0.4;pointer-events:none"'}>Lancer le backtest</button>
     ${resultHtml}`;
@@ -1121,6 +1153,14 @@ function render(){
       c.innerHTML = renderDashboard();
       $('#db-sync').onclick = () => syncNow();
       $('#db-import').onclick = () => $('#csv-input').click();
+      document.querySelectorAll('.stake-btn[data-m]').forEach(b => {
+        b.onclick = () => {
+          const m = +b.dataset.m;
+          DRAWS[0].mult = (DRAWS[0].mult === m) ? undefined : m;
+          saveDraws(DRAWS);
+          render();
+        };
+      });
       break;
     case 'numbers': c.innerHTML = renderNumbers(); break;
     case 'trends': c.innerHTML = renderTrends(); break;
@@ -1136,10 +1176,22 @@ function render(){
       break;
     case 'backtest':
       c.innerHTML = renderBacktest();
-      document.querySelectorAll('.stake-btn').forEach(b => {
+      document.querySelectorAll('.stake-btn[data-s]').forEach(b => {
         b.onclick = () => {
           state.btStake = +b.dataset.s;
-          document.querySelectorAll('.stake-btn').forEach(x => x.classList.toggle('on', x === b));
+          document.querySelectorAll('.stake-btn[data-s]').forEach(x => x.classList.toggle('on', x === b));
+        };
+      });
+      document.querySelectorAll('.stake-btn[data-scope]').forEach(b => {
+        b.onclick = () => {
+          state.btScope = b.dataset.scope;
+          document.querySelectorAll('.stake-btn[data-scope]').forEach(x => x.classList.toggle('on', x === b));
+        };
+      });
+      document.querySelectorAll('.stake-btn[data-mult]').forEach(b => {
+        b.onclick = () => {
+          state.btUseMult = b.dataset.mult === '1';
+          document.querySelectorAll('.stake-btn[data-mult]').forEach(x => x.classList.toggle('on', x === b));
         };
       });
       document.querySelectorAll('.pad-btn').forEach(b => {
@@ -1153,7 +1205,8 @@ function render(){
       });
       if($('#bt-run')) $('#bt-run').onclick = () => {
         if(state.btSel.length < 4 || state.btSel.length > 10) return;
-        state.btResult = backtest([...state.btSel].sort((a, b) => a - b), DRAWS, state.btStake);
+        const scope = state.btScope === '50' ? DRAWS.slice(0, 50) : state.btScope === 'last' ? DRAWS.slice(0, 1) : DRAWS;
+        state.btResult = backtest([...state.btSel].sort((a, b) => a - b), scope, state.btStake, state.btUseMult);
         render();
       };
       if($('#bt-load')) $('#bt-load').onclick = () => { state.btSel = [...state.genResult.grid]; state.btResult = null; render(); };
