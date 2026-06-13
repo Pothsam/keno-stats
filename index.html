@@ -119,10 +119,28 @@ footer{text-align:center;padding:32px 0;font-size:10px;text-transform:uppercase;
 .import-btn{flex:1;padding:10px 14px;border:1px solid var(--line-2);border-radius:6px;background:var(--paper);font-size:12px;font-weight:500;color:var(--ink-2);letter-spacing:0.02em;text-align:center}
 .import-btn:active{background:var(--paper-2)}
 
+/* Pavé numérique (backtest) */
+.pad{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.pad-btn{aspect-ratio:1;border-radius:6px;background:var(--paper);border:1px solid var(--line-2);font-family:'Fraunces',Georgia,serif;font-size:13px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--ink);transition:background 0.12s}
+.pad-btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pad-btn:disabled{opacity:0.32}
+.pad-count{font-size:12px;color:var(--mute);margin-top:12px;text-align:center;letter-spacing:0.02em}
+.stake-row{display:flex;gap:6px;flex-wrap:wrap}
+.stake-btn{flex:1;min-width:44px;padding:8px 0;text-align:center;border:1px solid var(--line-2);border-radius:100px;font-size:13px;font-weight:500;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.stake-btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.net-pos{color:#15803d}
+.net-neg{color:#b91c1c}
+.grid-card{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:10px}
+.grid-card .gc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.grid-card .gc-date{font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:var(--mute)}
+.grid-card .gc-del{font-size:11px;color:var(--mute);border:1px solid var(--line-2);border-radius:100px;padding:4px 10px}
+.empty{text-align:center;color:var(--mute);font-size:13px;padding:28px 12px;line-height:1.6}
+
 @media(max-width:380px){
   .grid-7{gap:4px}
   .heat-cell{font-size:11px}
   .heat-count{font-size:8px}
+  .pad{gap:4px}
 }
 </style>
 </head>
@@ -138,6 +156,8 @@ footer{text-align:center;padding:32px 0;font-size:10px;text-transform:uppercase;
     <button data-tab="trends">Tendances</button>
     <button data-tab="dist">Répartition</button>
     <button data-tab="gen">Générateur</button>
+    <button data-tab="backtest">Backtest</button>
+    <button data-tab="tracking">Suivi</button>
   </nav>
 </header>
 <main id="content"></main>
@@ -461,8 +481,19 @@ function computeStats(draws){
   }
   const avgOverlap = avg(overlaps);
 
+  // Écart record : plus longue série de tirages consécutifs sans le numéro.
+  const maxGap = Array(MAX_NUM + 1).fill(0);
+  const curGap = Array(MAX_NUM + 1).fill(0);
+  for(let i = draws.length - 1; i >= 0; i--){ // ordre chronologique
+    const present = new Set(draws[i].nums);
+    for(let n = 1; n <= MAX_NUM; n++){
+      if(present.has(n)){ curGap[n] = 0; }
+      else { curGap[n]++; if(curGap[n] > maxGap[n]) maxGap[n] = curGap[n]; }
+    }
+  }
+
   return {
-    freq, delay, pairCounts, impairCounts, lowCounts, highCounts, sums,
+    freq, delay, maxGap, pairCounts, impairCounts, lowCounts, highCounts, sums,
     avgPairs, avgLow, avgSum, overlaps, avgOverlap,
     minOverlap: Math.min(...overlaps), maxOverlap: Math.max(...overlaps),
   };
@@ -497,6 +528,91 @@ function generateGrid(N, draws, stats){
   for(let i = 1; i <= MAX_NUM; i++) if(!previous.includes(i)) rest.push(i);
   const fromRest = sampleWeighted(rest, N - seedCount, stats.freq);
   return { grid: [...fromPrev, ...fromRest].sort((a, b) => a - b), fromPrev, seedCount, ratio };
+}
+
+// ============ GAINS & BACKTEST ============
+// Table officielle FDJ (nouvelle formule, mise de 1 €), source : tableau des gains de l'appli FDJ.
+// [numéros cochés][numéros trouvés] = gain en € pour 1 € misé. Modifiable si la FDJ révise le règlement.
+const GAINS = {
+  4:  { 3: 3, 4: 70 },
+  5:  { 3: 2, 4: 10, 5: 80 },
+  6:  { 4: 3, 5: 30, 6: 900 },
+  7:  { 4: 2, 5: 5, 6: 90, 7: 3000 },
+  8:  { 0: 2, 5: 5, 6: 30, 7: 100, 8: 8000 },
+  9:  { 0: 2, 4: 1, 5: 2, 6: 8, 7: 25, 8: 100, 9: 30000 },
+  10: { 0: 2, 5: 2, 6: 5, 7: 15, 8: 150, 9: 2000, 10: 200000 },
+};
+const STAKES = [1, 2, 3, 5, 10];
+
+function gainFor(N, hits, stake){
+  const table = GAINS[N];
+  if(!table) return 0;
+  return (table[hits] || 0) * stake;
+}
+
+// Convertit une date JJ/MM/AA en clé numérique comparable.
+function dateKey(s){
+  const [d, m, y] = s.split('/').map(Number);
+  return y * 10000 + m * 100 + d;
+}
+
+// Rejoue une grille sur une liste de tirages et calcule le bilan complet.
+function backtest(grid, draws, stake){
+  const N = grid.length;
+  const hitDist = Array(Math.min(N, DRAW_SIZE) + 1).fill(0);
+  let totalGain = 0, wins = 0, best = 0, bestDraw = null, bestHits = 0;
+  draws.forEach(dr => {
+    const set = new Set(dr.nums);
+    let hits = 0;
+    for(const n of grid) if(set.has(n)) hits++;
+    hitDist[hits]++;
+    const g = gainFor(N, hits, stake);
+    if(g > 0){
+      totalGain += g;
+      wins++;
+      if(g > best){ best = g; bestDraw = dr.date; bestHits = hits; }
+    }
+  });
+  const n = draws.length;
+  const totalStake = n * stake;
+  const net = totalGain - totalStake;
+  return {
+    N, n, stake, totalStake, totalGain, net,
+    roi: totalStake > 0 ? (net / totalStake) * 100 : 0,
+    trj: totalStake > 0 ? (totalGain / totalStake) * 100 : 0,
+    hitDist, wins, best, bestDraw, bestHits,
+  };
+}
+
+// ============ GRILLES ENREGISTRÉES (SUIVI) ============
+const STORAGE_GRIDS = 'keno_grids_v1';
+function loadGrids(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_GRIDS)) || []; } catch(e){ return []; }
+}
+function saveGrids(g){
+  try { localStorage.setItem(STORAGE_GRIDS, JSON.stringify(g)); } catch(e){}
+}
+function addGrid(nums, stake){
+  const grids = loadGrids();
+  grids.unshift({
+    id: Date.now(),
+    nums: [...nums].sort((a, b) => a - b),
+    stake: stake || 1,
+    since: DRAWS[0] ? DRAWS[0].date : null,
+    savedAt: new Date().toISOString(),
+  });
+  saveGrids(grids);
+}
+function removeGrid(id){
+  saveGrids(loadGrids().filter(g => g.id !== id));
+}
+
+// Loi normale centrée réduite (approximation Abramowitz-Stegun) — pour le test du khi-deux.
+function normalCDF(z){
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp(-z * z / 2);
+  let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
 }
 
 // ============ HELPERS UI ============
@@ -561,7 +677,7 @@ function barChart(data, opts = {}){
 }
 
 // ============ ÉTAT GLOBAL ============
-const state = { tab: 'dashboard', genN: 6, genResult: null };
+const state = { tab: 'dashboard', genN: 6, genResult: null, btSel: [], btStake: 1, btResult: null };
 let stats = computeStats(DRAWS);
 
 function updateHeader(){
@@ -716,8 +832,8 @@ function renderNumbers(){
       <div class="legend-note">Intensité = fréquence relative. Nombre en bas = apparitions.</div>
     </div>
     <div class="section">
-      ${title('Numéros froids', 'Les plus retardés')}
-      ${cold.map(({n, d}) => `<div class="list-row">${ball(n, '', 'sm')}<div class="row-mid">absent depuis</div><div class="row-val">${d}</div><div class="row-unit">tirages</div></div>`).join('')}
+      ${title('Numéros froids', 'Écart actuel · record historique')}
+      ${cold.map(({n, d}) => `<div class="list-row">${ball(n, '', 'sm')}<div class="row-mid">absent depuis · record ${stats.maxGap[n]}</div><div class="row-val">${d}</div><div class="row-unit">tirages</div></div>`).join('')}
     </div>
     <div class="section">
       ${title('Numéros chauds', 'Top 8 fréquences')}
@@ -810,7 +926,33 @@ function renderDist(){
         ${stat('Moyenne', Math.round(stats.avgSum))}
         ${stat('Max', Math.max(...stats.sums))}
       </div>
+    </div>
+    ${(() => {
+      const totalDrawn = DRAWS.length * DRAW_SIZE;
+      const expected = totalDrawn / MAX_NUM;
+      let chi2 = 0;
+      for(let n = 1; n <= MAX_NUM; n++){ const o = stats.freq[n]; chi2 += (o - expected) * (o - expected) / expected; }
+      const df = MAX_NUM - 1;
+      const crit05 = 73.31; // seuil khi-deux à 5 %, df = 55
+      // p-value via approximation de Wilson-Hilferty
+      const z = (Math.cbrt(chi2 / df) - (1 - 2 / (9 * df))) / Math.sqrt(2 / (9 * df));
+      const p = 1 - normalCDF(z);
+      const conforme = chi2 < crit05;
+      return `
+    <div class="section">
+      ${title('Test du hasard', 'Uniformité des fréquences · khi-deux')}
+      <div class="grid-2">
+        ${stat('Khi-deux', chi2.toFixed(1), `seuil 5 % : ${crit05}`)}
+        ${stat('p-value', (p * 100).toFixed(0) + ' %', `${df} degrés de liberté`)}
+      </div>
+      <div class="method-box" style="margin-top:8px">
+        <p>${conforme
+          ? `Les écarts de fréquence observés sont <strong>compatibles avec un tirage parfaitement aléatoire</strong>. Aucun numéro n'est sorti significativement plus ou moins que les autres : ce qui ressemble à des numéros « chauds » ou « froids » est le bruit normal du hasard.`
+          : `Le khi-deux dépasse le seuil de 5 %, ce qui est <strong>inhabituel</strong> sur un échantillon de cette taille. Avec seulement ${DRAWS.length} tirages, c'est plus probablement une fluctuation qu'un vrai biais — à reconsidérer quand l'historique grandira.`}</p>
+        <p class="small">Le test compare la fréquence de chaque numéro à la valeur attendue (${expected.toFixed(1)} sorties). C'est le contrepoint honnête du générateur : il rappelle qu'aucune analyse ne donne d'avantage prédictif réel.</p>
+      </div>
     </div>`;
+    })()}`;
 }
 
 function renderGen(){
@@ -835,6 +977,10 @@ function renderGen(){
           <span><span class="gen-legend-dot accent"></span>Nouveau</span>
         </div>
       </div>
+      <div class="import-row">
+        <button class="import-btn" id="gen-save">Enregistrer dans le suivi</button>
+        <button class="import-btn" id="gen-test">Tester dans le backtest</button>
+      </div>
     </div>
     <div class="section">
       ${title('Méthode', 'Comment ces numéros ont été choisis')}
@@ -854,6 +1000,119 @@ function renderGen(){
 }
 
 // ============ RENDU ============
+function renderBacktest(){
+  const sel = state.btSel, stake = state.btStake;
+  const cells = [];
+  for(let n = 1; n <= MAX_NUM; n++){
+    const on = sel.includes(n);
+    const disabled = !on && sel.length >= 10;
+    cells.push(`<button class="pad-btn ${on ? 'on' : ''}" data-n="${n}" ${disabled ? 'disabled' : ''}>${n}</button>`);
+  }
+  const ready = sel.length >= 4 && sel.length <= 10;
+  const r = state.btResult;
+  let resultHtml = '';
+  if(r){
+    const distData = r.hitDist.map((v, i) => ({ l: String(i), v }));
+    const netCls = r.net >= 0 ? 'net-pos' : 'net-neg';
+    resultHtml = `
+    <div class="section">
+      ${title('Bilan', `Grille de ${r.N} numéros · mise ${r.stake} € · ${r.n} tirages`)}
+      <div class="grid-2">
+        ${stat('Mise totale', r.totalStake.toLocaleString('fr-FR') + ' €', `${r.n} × ${r.stake} €`)}
+        ${stat('Gains', r.totalGain.toLocaleString('fr-FR') + ' €', `${r.wins} tirage${r.wins > 1 ? 's' : ''} gagnant${r.wins > 1 ? 's' : ''}`)}
+        ${stat('Solde net', `<span class="${netCls}">${r.net >= 0 ? '+' : ''}${r.net.toLocaleString('fr-FR')} €</span>`)}
+        ${stat('ROI', `<span class="${netCls}">${r.roi >= 0 ? '+' : ''}${r.roi.toFixed(1)} %</span>`, `TRJ réalisé ${r.trj.toFixed(1)} %`)}
+      </div>
+    </div>
+    <div class="section">
+      ${title('Distribution', 'Numéros trouvés par tirage')}
+      <div class="card chart-card">${barChart(distData)}</div>
+      <div class="chart-meta">${r.best > 0 ? `Meilleur tirage : ${r.best.toLocaleString('fr-FR')} € (${r.bestHits} bons · ${r.bestDraw})` : 'Aucun gain sur la période.'}</div>
+    </div>
+    <div class="import-row">
+      <button class="import-btn" id="bt-save">Enregistrer dans le suivi</button>
+    </div>
+    <div class="section">
+      <div class="method-box">
+        <p>Ce bilan rejoue la même grille sur les ${r.n} tirages de l'historique, avec la table de gains officielle FDJ. Le solde net est presque toujours négatif : c'est le TRJ de 59,5 % à l'œuvre.</p>
+        <p class="small">Hors option Multiplicateur (tirée au hasard à chaque tirage, espérance ×2,45). Le passé ne prédit pas les tirages futurs.</p>
+      </div>
+    </div>`;
+  }
+  return `
+    <div class="section">
+      ${title('Mise', 'Coût par tirage')}
+      <div class="stake-row">${STAKES.map(s => `<button class="stake-btn ${stake === s ? 'on' : ''}" data-s="${s}">${s} €</button>`).join('')}</div>
+    </div>
+    <div class="section">
+      ${title('Composer la grille', 'Cochez 4 à 10 numéros')}
+      <div class="pad">${cells.join('')}</div>
+      <div class="pad-count">${sel.length} / 10 sélectionné${sel.length > 1 ? 's' : ''}${sel.length < 4 ? ' · minimum 4' : ''}</div>
+      ${state.genResult ? `<div class="import-row"><button class="import-btn" id="bt-load">Charger la dernière grille générée</button></div>` : ''}
+    </div>
+    <button class="primary-btn" id="bt-run" ${ready ? '' : 'style="opacity:0.4;pointer-events:none"'}>Lancer le backtest</button>
+    ${resultHtml}`;
+}
+
+function renderTracking(){
+  const grids = loadGrids();
+  if(grids.length === 0){
+    return `
+    <div class="section">
+      ${title('Mes grilles', 'Suivi des grilles enregistrées')}
+      <div class="empty">Aucune grille enregistrée.<br>Depuis le Générateur ou le Backtest, enregistrez une grille : l'app comparera chaque nouveau tirage et calculera vos gains.</div>
+    </div>`;
+  }
+  const cards = grids.map(g => {
+    const future = DRAWS.filter(d => g.since ? dateKey(d.date) > dateKey(g.since) : true);
+    const r = backtest(g.nums, future, g.stake);
+    const netCls = r.net >= 0 ? 'net-pos' : 'net-neg';
+    const perf = r.n === 0
+      ? `<div class="empty" style="padding:14px 0">Aucun tirage depuis l'enregistrement.<br>Revenez après le prochain tirage de 20h.</div>`
+      : `<div class="grid-3">
+          ${stat('Tirages', r.n, 'depuis')}
+          ${stat('Gains', r.totalGain.toLocaleString('fr-FR') + ' €', `${r.wins} gagnant${r.wins > 1 ? 's' : ''}`)}
+          ${stat('Solde', `<span class="${netCls}">${r.net >= 0 ? '+' : ''}${r.net.toLocaleString('fr-FR')} €</span>`, `mise ${g.stake} €`)}
+        </div>`;
+    return `
+    <div class="grid-card">
+      <div class="gc-head">
+        <span class="gc-date">${g.nums.length} num · mise ${g.stake} €${g.since ? ` · depuis ${g.since}` : ''}</span>
+        <button class="gc-del" data-id="${g.id}">Supprimer</button>
+      </div>
+      <div class="flex-balls" style="margin-bottom:12px">${g.nums.map(n => ball(n, 'accent', 'sm')).join('')}</div>
+      ${perf}
+    </div>`;
+  }).join('');
+  return `
+    <div class="section">
+      ${title('Mes grilles', `${grids.length} grille${grids.length > 1 ? 's' : ''} suivie${grids.length > 1 ? 's' : ''}`)}
+      ${cards}
+      <div class="method-box" style="margin-top:6px">
+        <p class="small">Chaque grille est comparée aux tirages survenus depuis son enregistrement. Gains selon la table officielle FDJ, hors Multiplicateur.</p>
+      </div>
+    </div>`;
+}
+
+// Mise à jour du pavé numérique sans re-render complet (évite le saut de défilement).
+function updatePad(){
+  const sel = state.btSel;
+  document.querySelectorAll('.pad-btn').forEach(b => {
+    const n = +b.dataset.n;
+    const on = sel.includes(n);
+    b.classList.toggle('on', on);
+    b.disabled = !on && sel.length >= 10;
+  });
+  const count = $('.pad-count');
+  if(count) count.innerHTML = `${sel.length} / 10 sélectionné${sel.length > 1 ? 's' : ''}${sel.length < 4 ? ' · minimum 4' : ''}`;
+  const run = $('#bt-run');
+  if(run){
+    const ready = sel.length >= 4 && sel.length <= 10;
+    run.style.opacity = ready ? '' : '0.4';
+    run.style.pointerEvents = ready ? '' : 'none';
+  }
+}
+
 function render(){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === state.tab));
   const c = $('#content');
@@ -871,6 +1130,39 @@ function render(){
       $('#gen-btn').onclick = () => { state.genResult = generateGrid(state.genN, DRAWS, stats); render(); };
       document.querySelectorAll('.choice-btn').forEach(b => {
         b.onclick = () => { state.genN = +b.dataset.n; state.genResult = generateGrid(state.genN, DRAWS, stats); render(); };
+      });
+      $('#gen-save').onclick = () => { addGrid(state.genResult.grid, 1); flash('Grille enregistrée dans le suivi'); };
+      $('#gen-test').onclick = () => { state.btSel = [...state.genResult.grid]; state.btResult = null; state.tab = 'backtest'; render(); };
+      break;
+    case 'backtest':
+      c.innerHTML = renderBacktest();
+      document.querySelectorAll('.stake-btn').forEach(b => {
+        b.onclick = () => {
+          state.btStake = +b.dataset.s;
+          document.querySelectorAll('.stake-btn').forEach(x => x.classList.toggle('on', x === b));
+        };
+      });
+      document.querySelectorAll('.pad-btn').forEach(b => {
+        b.onclick = () => {
+          const n = +b.dataset.n;
+          const i = state.btSel.indexOf(n);
+          if(i >= 0) state.btSel.splice(i, 1);
+          else { if(state.btSel.length >= 10) return; state.btSel.push(n); }
+          updatePad();
+        };
+      });
+      if($('#bt-run')) $('#bt-run').onclick = () => {
+        if(state.btSel.length < 4 || state.btSel.length > 10) return;
+        state.btResult = backtest([...state.btSel].sort((a, b) => a - b), DRAWS, state.btStake);
+        render();
+      };
+      if($('#bt-load')) $('#bt-load').onclick = () => { state.btSel = [...state.genResult.grid]; state.btResult = null; render(); };
+      if($('#bt-save')) $('#bt-save').onclick = () => { addGrid([...state.btSel].sort((a, b) => a - b), state.btStake); flash('Grille enregistrée dans le suivi'); };
+      break;
+    case 'tracking':
+      c.innerHTML = renderTracking();
+      document.querySelectorAll('.gc-del').forEach(b => {
+        b.onclick = () => { removeGrid(+b.dataset.id); render(); };
       });
       break;
   }

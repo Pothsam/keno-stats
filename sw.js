@@ -1,4 +1,4 @@
-const CACHE = 'keno-v1';
+const CACHE = 'keno-v2';
 const ASSETS = [
   './',
   './index.html',
